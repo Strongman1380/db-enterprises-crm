@@ -1,10 +1,11 @@
 import { Toaster } from 'react-hot-toast'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import MobileNav from './MobileNav'
 
 export default function Layout({ children }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-ivory">
+    <div className="flex h-dvh overflow-hidden bg-ivory">
       <Toaster
         position="bottom-right"
         toastOptions={{
@@ -26,13 +27,16 @@ export default function Layout({ children }) {
           },
         }}
       />
-      <Sidebar />
+      <div className="hidden md:block h-full">
+        <Sidebar />
+      </div>
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {children}
         </main>
       </div>
+      <MobileNav />
     </div>
   )
 }

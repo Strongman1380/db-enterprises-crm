@@ -12,7 +12,7 @@ export default function Header() {
   const { activePage, user } = useStore()
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 bg-ivory/80 backdrop-blur-sm border-b border-ivory-300/80 sticky top-0 z-10">
+    <header className="h-14 flex items-center justify-between px-4 sm:px-6 bg-ivory/80 backdrop-blur-sm border-b border-ivory-300/80 sticky top-0 z-10 pt-safe">
       <div>
         <h1 className="text-base font-semibold text-charcoal">{pageTitles[activePage]}</h1>
       </div>
@@ -24,7 +24,7 @@ export default function Header() {
           <span className="text-xs">Search...</span>
         </div>
 
-        <button className="w-8 h-8 rounded-xl bg-white/80 border border-ivory-300 flex items-center justify-center hover:bg-white transition-colors">
+        <button className="hidden sm:flex w-8 h-8 rounded-xl bg-white/80 border border-ivory-300 items-center justify-center hover:bg-white transition-colors">
           <Bell size={14} className="text-charcoal-muted" />
         </button>
 
