@@ -134,7 +134,7 @@ function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">Invoice Number</label>
           <input
@@ -350,7 +350,7 @@ export default function Invoices() {
   }
 
   return (
-    <div className="p-6 page-enter">
+    <div className="page-enter w-full max-w-full overflow-x-hidden p-4 sm:p-6">
       {/* Filters + Add */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="flex gap-2 flex-1 flex-wrap">
@@ -400,8 +400,8 @@ export default function Invoices() {
                 animate={{ opacity: 1, y: 0 }}
                 className="glass-card p-4"
               >
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-navy/8 flex items-center justify-center flex-shrink-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                  <div className="hidden w-10 h-10 rounded-xl bg-navy/8 sm:flex items-center justify-center flex-shrink-0">
                     <FileText size={16} className="text-navy/60" />
                   </div>
 
@@ -423,22 +423,22 @@ export default function Invoices() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 mt-3 pt-3 border-t border-ivory-300/60">
-                  <button onClick={() => handleDownloadPDF(inv)} className="btn-ghost text-xs py-1.5 px-3">
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-ivory-300/60 pt-3">
+                  <button onClick={() => handleDownloadPDF(inv)} className="btn-ghost min-h-9 text-xs py-1.5 px-3">
                     <Download size={12} /> Download PDF
                   </button>
                   {inv.status !== 'sent' && (
-                    <button onClick={() => setInvoiceStatus(inv, 'sent')} className="btn-ghost text-xs py-1.5 px-3">
+                    <button onClick={() => setInvoiceStatus(inv, 'sent')} className="btn-ghost min-h-9 text-xs py-1.5 px-3">
                       <Send size={12} /> Not Paid
                     </button>
                   )}
                   {inv.status !== 'partial' && (
-                    <button onClick={() => setInvoiceStatus(inv, 'partial')} className="btn-ghost text-xs py-1.5 px-3">
+                    <button onClick={() => setInvoiceStatus(inv, 'partial')} className="btn-ghost min-h-9 text-xs py-1.5 px-3">
                       <CircleDollarSign size={12} className="text-amber-500" /> Partial
                     </button>
                   )}
                   {inv.status !== 'paid' && (
-                    <button onClick={() => setInvoiceStatus(inv, 'paid')} className="btn-ghost text-xs py-1.5 px-3">
+                    <button onClick={() => setInvoiceStatus(inv, 'paid')} className="btn-ghost min-h-9 text-xs py-1.5 px-3">
                       <CheckCircle size={12} className="text-emerald-500" /> Paid
                     </button>
                   )}

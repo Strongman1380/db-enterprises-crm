@@ -12,8 +12,8 @@ export default function MobileNav() {
   const { activePage, setActivePage } = useStore()
 
   return (
-    <nav className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy/95 backdrop-blur-lg pb-safe">
-      <div className="grid grid-cols-4 px-2 pt-2">
+    <nav className="md:hidden shrink-0 border-b border-white/10 bg-navy/95 backdrop-blur-lg">
+      <div className="grid grid-cols-4 gap-1 px-2 py-2">
         {navItems.map(({ id, label, icon: Icon }) => {
           const active = activePage === id
           return (
@@ -21,7 +21,7 @@ export default function MobileNav() {
               key={id}
               type="button"
               onClick={() => setActivePage(id)}
-              className={`flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition-colors ${
+              className={`flex h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-semibold transition-colors ${
                 active ? 'bg-gold/15 text-gold' : 'text-ivory/70'
               }`}
               aria-current={active ? 'page' : undefined}

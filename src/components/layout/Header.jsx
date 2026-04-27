@@ -12,12 +12,12 @@ export default function Header() {
   const { activePage, user } = useStore()
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 sm:px-6 bg-ivory/80 backdrop-blur-sm border-b border-ivory-300/80 sticky top-0 z-10 pt-safe">
-      <div>
-        <h1 className="text-base font-semibold text-charcoal">{pageTitles[activePage]}</h1>
+    <header className="h-14 min-w-0 flex items-center justify-between gap-3 px-4 sm:px-6 bg-ivory/80 backdrop-blur-sm border-b border-ivory-300/80 sticky top-0 z-10 pt-safe">
+      <div className="min-w-0">
+        <h1 className="truncate text-base font-semibold text-charcoal">{pageTitles[activePage]}</h1>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         {/* Search placeholder */}
         <div className="hidden md:flex items-center gap-2 bg-white/80 border border-ivory-300 rounded-xl px-3 py-1.5 text-sm text-charcoal-muted/60 w-48">
           <Search size={14} />

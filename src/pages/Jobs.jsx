@@ -261,7 +261,7 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Job basics */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Job Title *</label>
           <input className="input-field" required value={form.title} onChange={e => set('title', e.target.value)} placeholder="Roof replacement — 123 Main St" />
@@ -435,7 +435,7 @@ export default function Jobs() {
   }
 
   return (
-    <div className="p-6 page-enter">
+    <div className="page-enter w-full max-w-full overflow-x-hidden p-4 sm:p-6">
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm text-charcoal-muted">{jobs.length} job{jobs.length !== 1 ? 's' : ''} in pipeline</p>
         <button onClick={() => setShowAdd(true)} className="btn-primary">
@@ -466,9 +466,9 @@ export default function Jobs() {
                 layout
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="glass-card p-4 flex items-center gap-4"
+                className="glass-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
               >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(22,50,79,0.08)' }}>
+                <div className="hidden w-10 h-10 rounded-xl sm:flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(22,50,79,0.08)' }}>
                   <Briefcase size={16} style={{ color: 'rgba(22,50,79,0.5)' }} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -487,7 +487,7 @@ export default function Jobs() {
                   <p className="text-base font-bold text-navy">{fmt(job.total)}</p>
                   <p className="text-xs text-charcoal-muted">Total</p>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
+                <div className="flex w-full justify-end gap-1 border-t border-ivory-300/60 pt-2 sm:w-auto sm:border-t-0 sm:pt-0 flex-shrink-0">
                   <button
                     onClick={() => toast.promise(generateInvoicePDF(job, 'ESTIMATE'), {
                       loading: 'Preparing estimate…',

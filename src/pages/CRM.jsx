@@ -49,7 +49,7 @@ function ContactForm({ initial = {}, onSubmit, onClose }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className="label">Full Name *</label>
           <input
@@ -143,7 +143,7 @@ function ContactDetail({ contact, onEdit, onDelete, onClose }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {contact.email && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-ivory/60">
             <Mail size={14} className="text-charcoal-muted" />
@@ -284,7 +284,7 @@ export default function CRM() {
   const allTags = [...new Set(contacts.flatMap(c => c.tags || []))]
 
   return (
-    <div className="p-6 page-enter">
+    <div className="page-enter w-full max-w-full overflow-x-hidden p-4 sm:p-6">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="flex-1 relative">
@@ -296,7 +296,7 @@ export default function CRM() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           <select className="input-field w-auto" value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="all">All Types</option>
             <option value="lead">Leads</option>

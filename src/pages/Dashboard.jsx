@@ -87,7 +87,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="p-6 page-enter">
+    <div className="page-enter w-full max-w-full overflow-x-hidden p-4 sm:p-6">
       {/* Welcome */}
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-charcoal">Good morning</h2>
@@ -99,7 +99,7 @@ export default function Dashboard() {
         initial="initial"
         animate="animate"
         variants={stagger.container}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
       >
         {statCards.map((card) => (
           <motion.div key={card.label} variants={stagger.item} className="stat-card">
