@@ -5,3 +5,4 @@ dist
 .DS_Store
 .playwright-mcp
 firebase-debug.log
+.vercel
