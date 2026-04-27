@@ -17,17 +17,34 @@
   html,
   body,
   #root {
-    width: 100%;
+    width: 100dvw;
+    max-width: 100dvw;
     min-width: 0;
+    height: 100%;
+    margin: 0;
     overflow-x: hidden;
-   }
+  }
+
+  html {
+    position: fixed;
+    inset: 0;
+  }
 
   body {
+    position: fixed;
+    inset: 0;
     font-family: 'Inter', system-ui, sans-serif;
     background-color: #F7F5F0;
     color: #22262B;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
+    touch-action: pan-y;
+  }
+
+  #root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
   }
 
   ::selection {

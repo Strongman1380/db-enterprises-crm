@@ -11,10 +11,12 @@ import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 import Jobs from './pages/Jobs'
 import Invoices from './pages/Invoices'
+import { useLockHorizontalScroll } from './hooks/useLockHorizontalScroll'
 import { AnimatePresence, motion } from 'framer-motion'
 
 export default function App() {
   const { user, setUser, setContacts, setJobs, setInvoices, activePage } = useStore()
+  useLockHorizontalScroll(activePage)
 
   // Auth listener
   useEffect(() => {
