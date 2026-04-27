@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf'
+import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import logoImg from '../../assets/images/logo_dynamic.png'
 
@@ -143,11 +143,11 @@ export async function generateInvoicePDF(data, type = 'INVOICE') {
 
   // Thin dividers between cells
   doc.setDrawColor(255, 255, 255)
-  doc.setGlobalAlpha(0.15)
+  if (typeof doc.setGlobalAlpha === 'function') doc.setGlobalAlpha(0.15)
   ;[1, 2, 3].forEach(i => {
     doc.line(COL[i] - 4, META_Y + 5, COL[i] - 4, META_Y + META_H - 5)
   })
-  doc.setGlobalAlpha(1)
+  if (typeof doc.setGlobalAlpha === 'function') doc.setGlobalAlpha(1)
 
   // ═══════════════════════════════════════════════════════════════════════
   // SECTION 3 — BILL TO / JOB INFO  (white bg)

@@ -6,6 +6,17 @@ import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import bannerUrl from '/assets/images/Banner.png'
 import logoUrl from '/assets/images/logo_dynamic.png'
 
+const AUTH_ERROR_MESSAGES = {
+  'auth/invalid-credential': 'Invalid email or password.',
+  'auth/user-not-found': 'Invalid email or password.',
+  'auth/wrong-password': 'Invalid email or password.',
+  'auth/too-many-requests': 'Too many failed attempts. Reset the password or try again later.',
+  'auth/network-request-failed': 'Network error. Check your connection and try again.',
+  'auth/configuration-not-found': 'Firebase Auth is not configured for this project.',
+  'auth/operation-not-allowed': 'Email/password sign-in is not enabled in Firebase Auth.',
+  'auth/unauthorized-domain': 'This local URL is not authorized in Firebase Auth settings.',
+}
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -20,7 +31,8 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email, password)
     } catch (err) {
-      setError('Invalid email or password.')
+      console.error('Firebase sign-in failed:', err.code, err.message)
+      setError(AUTH_ERROR_MESSAGES[err.code] || `Sign-in failed: ${err.code || 'unknown error'}`)
     } finally {
       setLoading(false)
     }

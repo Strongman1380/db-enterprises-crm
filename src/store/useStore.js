@@ -38,10 +38,11 @@ export const useStore = create((set, get) => ({
   getStats: () => {
     const { contacts, jobs, invoices } = get()
     const paid = invoices.filter(i => i.status === 'paid')
+    const partial = invoices.filter(i => i.status === 'partial')
     const sent = invoices.filter(i => i.status === 'sent')
     const draft = invoices.filter(i => i.status === 'draft')
     const revenue = paid.reduce((s, i) => s + (i.total || 0), 0)
-    const outstanding = sent.reduce((s, i) => s + (i.total || 0), 0)
-    return { contacts: contacts.length, jobs: jobs.length, revenue, outstanding, paid: paid.length, sent: sent.length, draft: draft.length }
+    const outstanding = [...sent, ...partial].reduce((s, i) => s + (i.total || 0), 0)
+    return { contacts: contacts.length, jobs: jobs.length, revenue, outstanding, paid: paid.length, partial: partial.length, sent: sent.length, draft: draft.length }
   },
 }))

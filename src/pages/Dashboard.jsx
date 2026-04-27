@@ -128,10 +128,11 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold text-charcoal">Invoice Pipeline</h3>
           <button onClick={() => setActivePage('invoices')} className="text-xs text-navy font-medium hover:underline">View all</button>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Draft', count: stats.draft, icon: FileText, cls: 'bg-gray-100 text-gray-500' },
-            { label: 'Sent', count: stats.sent, icon: Clock, cls: 'bg-blue-100 text-blue-600' },
+            { label: 'Not Paid', count: stats.sent, icon: Clock, cls: 'bg-blue-100 text-blue-600' },
+            { label: 'Partial', count: stats.partial, icon: AlertCircle, cls: 'bg-amber-100 text-amber-600' },
             { label: 'Paid', count: stats.paid, icon: CheckCircle, cls: 'bg-emerald-100 text-emerald-600' },
           ].map(({ label, count, icon: Icon, cls }) => (
             <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-ivory/60">

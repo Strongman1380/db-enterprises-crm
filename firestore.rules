@@ -1,9 +1,50 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only authenticated users can read/write
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn() && resource.data.createdBy == request.auth.uid;
+    }
+
+    function createsOwnRecord() {
+      return signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    function updatesOwnRecord() {
+      return isOwner()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.updatedBy == request.auth.uid;
+    }
+
+    match /contacts/{contactId} {
+      allow create: if createsOwnRecord();
+      allow read, delete: if isOwner();
+      allow update: if updatesOwnRecord();
+    }
+
+    match /jobs/{jobId} {
+      allow create: if createsOwnRecord();
+      allow read, delete: if isOwner();
+      allow update: if updatesOwnRecord();
+    }
+
+    match /invoices/{invoiceId} {
+      allow create: if createsOwnRecord();
+      allow read, delete: if isOwner();
+      allow update: if updatesOwnRecord();
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if signedIn();
+    }
+
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

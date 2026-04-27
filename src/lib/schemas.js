@@ -25,7 +25,7 @@ export const invoiceSchema = z.object({
   dueDate: z.string().min(1, 'Due date is required'),
   taxRate: z.union([z.number(), z.string()]).optional(),
   notes: z.string().max(2000).optional().or(z.literal('')),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue']),
+  status: z.enum(['draft', 'sent', 'partial', 'paid', 'overdue']),
   lineItems: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
 
@@ -34,7 +34,7 @@ export function validate(schema, data) {
   const result = schema.safeParse(data)
   if (result.success) return null
   const errors = {}
-  result.error.errors.forEach((e) => {
+  result.error.issues.forEach((e) => {
     const key = e.path[0]
     if (key && !errors[key]) errors[key] = e.message
   })

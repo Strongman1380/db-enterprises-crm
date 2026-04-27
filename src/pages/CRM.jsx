@@ -220,7 +220,7 @@ function ContactDetail({ contact, onEdit, onDelete, onClose }) {
 }
 
 export default function CRM() {
-  const { contacts } = useStore()
+  const { contacts, user } = useStore()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 250)
   const [filterType, setFilterType] = useState('all')
@@ -239,7 +239,7 @@ export default function CRM() {
   })
 
   const handleAdd = async (data) => {
-    await toast.promise(createContact(data), {
+    await toast.promise(createContact(data, user.uid), {
       loading: 'Adding contact…',
       success: `${data.name} added`,
       error: 'Failed to add contact',
@@ -247,7 +247,7 @@ export default function CRM() {
   }
 
   const handleEdit = async (data) => {
-    await toast.promise(updateContact(editing.id, data), {
+    await toast.promise(updateContact(editing.id, data, user.uid), {
       loading: 'Saving…',
       success: 'Contact updated',
       error: 'Failed to save changes',

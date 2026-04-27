@@ -4,7 +4,7 @@
  */
 
 import { initializeApp } from 'firebase/app'
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'
 import { readFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -42,8 +42,13 @@ if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'your_api_key_here') {
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 
-const EMAIL = env.ADMIN_EMAIL || 'admin@example.com'
-const PASSWORD = env.ADMIN_PASSWORD || 'password123'
+const EMAIL = process.env.ADMIN_EMAIL || env.ADMIN_EMAIL
+const PASSWORD = process.env.ADMIN_PASSWORD || env.ADMIN_PASSWORD
+
+if (!EMAIL || !PASSWORD) {
+  console.error('\nAdmin credentials missing. Set ADMIN_EMAIL and ADMIN_PASSWORD in your shell or .env file.\n')
+  process.exit(1)
+}
 
 try {
   const { user } = await createUserWithEmailAndPassword(auth, EMAIL, PASSWORD)
@@ -53,7 +58,18 @@ try {
   console.log(`\nYou can now sign in to the app with those credentials.\n`)
 } catch (err) {
   if (err.code === 'auth/email-already-in-use') {
-    console.log(`\n✓ User ${EMAIL} already exists — you're good to go.\n`)
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, EMAIL, PASSWORD)
+      console.log(`\n✓ Admin user already exists and the password was verified`)
+      console.log(`  Email:    ${EMAIL}`)
+      console.log(`  UID:      ${user.uid}`)
+      console.log(`\nYou can sign in to the app with those credentials.\n`)
+    } catch (signInErr) {
+      console.error(`\n✗ User ${EMAIL} already exists, but this password did not verify.`)
+      console.error(`  Firebase error: ${signInErr.code || signInErr.message}`)
+      console.error(`  Reset this user's password in Firebase Authentication, or provide the correct ADMIN_PASSWORD.\n`)
+      process.exit(1)
+    }
   } else {
     console.error(`\n✗ Error: ${err.message}\n`)
     process.exit(1)

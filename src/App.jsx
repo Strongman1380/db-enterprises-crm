@@ -25,9 +25,9 @@ export default function App() {
   useEffect(() => {
     if (!user) return
     const unsubs = [
-      subscribeToContacts(setContacts),
-      subscribeToJobs(setJobs),
-      subscribeToInvoices(setInvoices),
+      subscribeToContacts(user.uid, setContacts),
+      subscribeToJobs(user.uid, setJobs),
+      subscribeToInvoices(user.uid, setInvoices),
     ]
     return () => unsubs.forEach(u => u())
   }, [user])

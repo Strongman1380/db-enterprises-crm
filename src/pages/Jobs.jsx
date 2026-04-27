@@ -5,6 +5,7 @@ import { Plus, Briefcase, Trash2, Edit2, Calculator, X, Download } from 'lucide-
 import { useStore } from '../store/useStore'
 import { createJob, updateJob, deleteJob } from '../services/jobs'
 import { generateInvoicePDF } from '../services/pdfService'
+import { calculateLaborLineTotalCents, calculateTotals, centsToDollars } from '../lib/money'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -12,9 +13,21 @@ import EmptyState from '../components/ui/EmptyState'
 const fmt = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0)
 const num = (v) => parseFloat(v) || 0
 
-// ─── Preset material options ───────────────────────────────────────────────
+// ─── Preset options ────────────────────────────────────────────────────────
+const SQFT_BID_PRESETS = [
+  'Concrete',
+  'Shingles',
+  'Roofing',
+  'Siding',
+  'Decking',
+  'Framing',
+  'Drywall',
+  'Flooring',
+  'Custom…',
+]
+
 const MATERIAL_PRESETS = [
-  'Shingles (per square)',
+  'Shingle materials',
   'Felt / Underlayment',
   'Drip Edge',
   'Ridge Cap',
@@ -34,40 +47,50 @@ const MATERIAL_PRESETS = [
   'Custom…',
 ]
 
-// ─── Totals calculator ─────────────────────────────────────────────────────
-function calcTotals(laborItems, lineItems, taxRate) {
-  const laborTotal = laborItems.reduce((s, r) => s + num(r.ratePerSqft) * num(r.squareFeet), 0)
-  const materialsTotal = lineItems.reduce((s, r) => s + num(r.qty) * num(r.unitPrice), 0)
-  const subtotal = laborTotal + materialsTotal
-  const taxAmount = subtotal * (num(taxRate) / 100)
-  const total = subtotal + taxAmount
-  return { laborTotal, materialsTotal, subtotal, taxAmount, total }
-}
-
 // ─── Labor row ─────────────────────────────────────────────────────────────
 function LaborRow({ row, onChange, onRemove, index }) {
-  const rowTotal = num(row.ratePerSqft) * num(row.squareFeet)
+  const rowTotal = centsToDollars(calculateLaborLineTotalCents(row.ratePerSqft, row.squareFeet))
+  const isCustom = row.preset === 'Custom…'
+
+  const handlePresetChange = (preset) => {
+    onChange('preset', preset)
+    if (preset !== 'Custom…') onChange('description', preset)
+    else onChange('description', '')
+  }
+
   return (
     <div className="rounded-xl border border-navy/10 bg-white/60 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-navy uppercase tracking-wider">Labor Line {index + 1}</span>
+        <span className="text-xs font-semibold text-navy uppercase tracking-wider">Sq Ft Bid Line {index + 1}</span>
         <button type="button" onClick={onRemove} className="text-charcoal-muted/40 hover:text-red-400 transition-colors">
           <X size={14} />
         </button>
       </div>
       <div className="grid grid-cols-12 gap-2">
-        {/* Description spans full width on first row */}
         <div className="col-span-12">
-          <label className="label">Description</label>
-          <input
+          <label className="label">Work Type</label>
+          <select
             className="input-field"
-            value={row.description}
-            onChange={e => onChange('description', e.target.value)}
-            placeholder="e.g. Roofing job — tear-off & replace"
-          />
+            value={row.preset || ''}
+            onChange={e => handlePresetChange(e.target.value)}
+          >
+            <option value="">— Select type —</option>
+            {SQFT_BID_PRESETS.map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          {isCustom && (
+            <input
+              className="input-field mt-2"
+              value={row.description}
+              onChange={e => onChange('description', e.target.value)}
+              placeholder="Describe the custom square-foot bid…"
+              autoFocus
+            />
+          )}
         </div>
         <div className="col-span-4">
-          <label className="label">$ / Sq Ft</label>
+          <label className="label">Price / Sq Ft</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-charcoal-muted text-sm">$</span>
             <input
@@ -80,7 +103,7 @@ function LaborRow({ row, onChange, onRemove, index }) {
           </div>
         </div>
         <div className="col-span-4">
-          <label className="label">Square Feet</label>
+          <label className="label">Total Sq Ft</label>
           <input
             className="input-field"
             type="number" min="0" step="1"
@@ -90,7 +113,7 @@ function LaborRow({ row, onChange, onRemove, index }) {
           />
         </div>
         <div className="col-span-4">
-          <label className="label">Line Total</label>
+          <label className="label">Bid Total</label>
           <div className="input-field bg-navy/4 border-navy/10 font-semibold text-navy cursor-default select-none">
             {fmt(rowTotal)}
           </div>
@@ -180,7 +203,7 @@ function MaterialRow({ row, onChange, onRemove, index }) {
 function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
   const defaultLaborItems = initial.laborItems?.length
     ? initial.laborItems
-    : [{ description: '', ratePerSqft: '', squareFeet: '' }]
+    : [{ preset: '', description: '', ratePerSqft: '', squareFeet: '' }]
 
   const defaultLineItems = initial.lineItems?.length
     ? initial.lineItems
@@ -199,10 +222,10 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
   const [lineItems, setLineItems] = useState(defaultLineItems)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const totals = calcTotals(laborItems, lineItems, form.taxRate)
+  const totals = calculateTotals({ laborItems, lineItems, taxRate: form.taxRate })
 
   // Labor helpers
-  const addLabor = () => setLaborItems(r => [...r, { description: '', ratePerSqft: '', squareFeet: '' }])
+  const addLabor = () => setLaborItems(r => [...r, { preset: '', description: '', ratePerSqft: '', squareFeet: '' }])
   const removeLabor = (i) => setLaborItems(r => r.filter((_, idx) => idx !== i))
   const updateLabor = (i, field, val) => setLaborItems(r => r.map((row, idx) => idx === i ? { ...row, [field]: val } : row))
 
@@ -220,7 +243,8 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     const cleanLabor = laborItems.map(r => ({
-      description: r.description || '',
+      preset: r.preset || '',
+      description: r.description || (r.preset && r.preset !== 'Custom…' ? r.preset : '') || '',
       ratePerSqft: num(r.ratePerSqft) || 0,
       squareFeet: num(r.squareFeet) || 0,
     }))
@@ -273,10 +297,10 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Calculator size={14} className="text-navy" />
-            <span className="label mb-0">Area &amp; Labor Calculator</span>
+            <span className="label mb-0">Square-Foot Bid Calculator</span>
           </div>
           <button type="button" onClick={addLabor} className="text-xs text-navy font-medium hover:underline flex items-center gap-1">
-            <Plus size={12} /> Add Labor Line
+            <Plus size={12} /> Add Bid Line
           </button>
         </div>
         <div className="space-y-2">
@@ -293,7 +317,7 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
 
         {/* Labor subtotal bar */}
         <div className="flex items-center justify-between bg-navy/5 border border-navy/10 rounded-xl px-4 py-2.5 mt-2">
-          <span className="text-xs font-semibold text-navy">Labor Subtotal</span>
+          <span className="text-xs font-semibold text-navy">Sq Ft Bid Subtotal</span>
           <span className="text-sm font-bold text-navy">{fmt(totals.laborTotal)}</span>
         </div>
       </div>
@@ -333,7 +357,7 @@ function JobForm({ initial = {}, contacts = [], onSubmit, onClose }) {
         </div>
         <div className="space-y-1.5 border-t border-ivory-300 pt-3">
           <div className="flex justify-between text-xs text-charcoal-muted">
-            <span>Labor</span><span>{fmt(totals.laborTotal)}</span>
+            <span>Square-foot bids</span><span>{fmt(totals.laborTotal)}</span>
           </div>
           <div className="flex justify-between text-xs text-charcoal-muted">
             <span>Materials &amp; charges</span><span>{fmt(totals.materialsTotal)}</span>
@@ -378,13 +402,13 @@ const STATUS_LABELS = {
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function Jobs() {
-  const { jobs, contacts } = useStore()
+  const { jobs, contacts, user } = useStore()
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
 
   const handleAdd = async (data) => {
-    await toast.promise(createJob(data), {
+    await toast.promise(createJob(data, user.uid), {
       loading: 'Creating job…',
       success: `"${data.title}" created`,
       error: 'Failed to create job',
@@ -392,7 +416,7 @@ export default function Jobs() {
   }
 
   const handleEdit = async (data) => {
-    await toast.promise(updateJob(editing.id, data), {
+    await toast.promise(updateJob(editing.id, data, user.uid), {
       loading: 'Saving…',
       success: 'Job updated',
       error: 'Failed to save changes',
@@ -465,7 +489,11 @@ export default function Jobs() {
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <button
-                    onClick={() => generateInvoicePDF(job, 'ESTIMATE')}
+                    onClick={() => toast.promise(generateInvoicePDF(job, 'ESTIMATE'), {
+                      loading: 'Preparing estimate…',
+                      success: 'Estimate downloaded',
+                      error: 'Failed to generate estimate',
+                    })}
                     className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(22,50,79,0.06)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}

@@ -1,32 +1,45 @@
 import {
   collection, addDoc, updateDoc, deleteDoc,
-  doc, getDoc, query, orderBy, onSnapshot,
+  doc, getDoc, query, where, onSnapshot,
   serverTimestamp
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { reserveInvoiceNumber } from './invoiceNumberReservations'
 
 const COLLECTION = 'invoices'
+const timestampMillis = (value) => value?.seconds ? value.seconds * 1000 : 0
 
-export const subscribeToInvoices = (callback) => {
-  const q = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'))
+export const subscribeToInvoices = (userId, callback) => {
+  const q = query(
+    collection(db, COLLECTION),
+    where('createdBy', '==', userId)
+  )
   return onSnapshot(q, (snapshot) => {
-    const invoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+    const invoices = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt))
     callback(invoices)
   })
 }
 
-export const createInvoice = async (data) => {
+export const createInvoice = async (data, userId) => {
+  const invoiceNumber = data.invoiceNumber || await reserveInvoiceNumber()
+
   return addDoc(collection(db, COLLECTION), {
     ...data,
+    invoiceNumber,
     status: data.status || 'draft',
+    createdBy: userId,
+    updatedBy: userId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 }
 
-export const updateInvoice = async (id, data) => {
+export const updateInvoice = async (id, data, userId) => {
   return updateDoc(doc(db, COLLECTION, id), {
     ...data,
+    updatedBy: userId,
     updatedAt: serverTimestamp(),
   })
 }
@@ -40,10 +53,4 @@ export const getInvoice = async (id) => {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-export const generateInvoiceNumber = () => {
-  const date = new Date()
-  const year = date.getFullYear().toString().slice(-2)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const rand = Math.floor(Math.random() * 9000) + 1000
-  return `DBE-${year}${month}-${rand}`
-}
+export { formatInvoiceNumber as generateInvoiceNumber } from './invoiceNumbers'

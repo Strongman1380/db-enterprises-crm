@@ -3,12 +3,13 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import {
   Plus, FileText, Download, Send, CheckCircle,
-  Trash2, Edit2, Eye, Clock, AlertCircle, X
+  Trash2, Edit2, AlertCircle, X, CircleDollarSign
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '../services/invoices'
+import { createInvoice, updateInvoice, deleteInvoice } from '../services/invoices'
 import { generateInvoicePDF } from '../services/pdfService'
 import { invoiceSchema, validate } from '../lib/schemas'
+import { calculateTotals } from '../lib/money'
 import Modal from '../components/ui/Modal'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
@@ -40,7 +41,7 @@ const MATERIAL_PRESETS = [
 
 function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose }) {
   const [form, setForm] = useState({
-    invoiceNumber: initial.invoiceNumber || generateInvoiceNumber(),
+    invoiceNumber: initial.invoiceNumber || '',
     jobId: initial.jobId || '',
     clientName: initial.clientName || '',
     clientEmail: initial.clientEmail || '',
@@ -103,13 +104,11 @@ function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose
     ))
   }
 
-  const subtotal = lineItems.reduce((s, li) => s + num(li.qty) * num(li.unitPrice), 0)
-  const taxAmount = subtotal * (num(form.taxRate) / 100)
-  const total = subtotal + taxAmount
+  const { subtotal, taxAmount, total } = calculateTotals({ lineItems, taxRate: form.taxRate })
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const fieldErrors = validate(invoiceSchema, { ...form, lineItems })
+    const fieldErrors = validate(invoiceSchema, { ...form, invoiceNumber: form.invoiceNumber || 'pending', lineItems })
     if (fieldErrors) { setErrors(fieldErrors); return }
 
     const cleanItems = lineItems.map(li => ({
@@ -142,6 +141,7 @@ function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose
             className={`input-field ${errors.invoiceNumber ? 'border-red-400' : ''}`}
             value={form.invoiceNumber}
             onChange={e => set('invoiceNumber', e.target.value)}
+            placeholder="Auto-assigned on save"
           />
           {errors.invoiceNumber && <p className="text-xs text-red-500 mt-1">{errors.invoiceNumber}</p>}
         </div>
@@ -149,7 +149,8 @@ function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose
           <label className="label">Status</label>
           <select className="input-field" value={form.status} onChange={e => set('status', e.target.value)}>
             <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
+            <option value="sent">Not Paid</option>
+            <option value="partial">Partially Paid</option>
             <option value="paid">Paid</option>
             <option value="overdue">Overdue</option>
           </select>
@@ -278,19 +279,33 @@ function InvoiceForm({ initial = {}, jobs = [], contacts = [], onSubmit, onClose
 }
 
 const handleDownloadPDF = (inv) => {
-  generateInvoicePDF(inv, 'INVOICE')
+  toast.promise(generateInvoicePDF(inv, 'INVOICE'), {
+    loading: 'Preparing PDF…',
+    success: 'PDF downloaded',
+    error: 'Failed to generate PDF',
+  })
 }
 
 
 const STATUS_CONFIG = {
   draft: { icon: FileText, cls: 'badge-draft', label: 'Draft' },
-  sent: { icon: Send, cls: 'badge-sent', label: 'Sent' },
+  sent: { icon: Send, cls: 'badge-sent', label: 'Not Paid' },
+  partial: { icon: CircleDollarSign, cls: 'badge-partial', label: 'Partially Paid' },
   paid: { icon: CheckCircle, cls: 'badge-paid', label: 'Paid' },
   overdue: { icon: AlertCircle, cls: 'badge-overdue', label: 'Overdue' },
 }
 
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'draft', label: 'Draft' },
+  { id: 'sent', label: 'Not Paid' },
+  { id: 'partial', label: 'Partially Paid' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'overdue', label: 'Overdue' },
+]
+
 export default function Invoices() {
-  const { invoices, jobs, contacts } = useStore()
+  const { invoices, jobs, contacts, user } = useStore()
   const [filterStatus, setFilterStatus] = useState('all')
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -299,7 +314,7 @@ export default function Invoices() {
   const filtered = filterStatus === 'all' ? invoices : invoices.filter(i => i.status === filterStatus)
 
   const handleAdd = async (data) => {
-    await toast.promise(createInvoice(data), {
+    await toast.promise(createInvoice(data, user.uid), {
       loading: 'Creating invoice…',
       success: `Invoice ${data.invoiceNumber} created`,
       error: 'Failed to create invoice',
@@ -307,7 +322,7 @@ export default function Invoices() {
   }
 
   const handleEdit = async (data) => {
-    await toast.promise(updateInvoice(editing.id, data), {
+    await toast.promise(updateInvoice(editing.id, data, user.uid), {
       loading: 'Saving…',
       success: 'Invoice updated',
       error: 'Failed to save changes',
@@ -325,18 +340,11 @@ export default function Invoices() {
     setDeleting(null)
   }
 
-  const markPaid = async (inv) => {
-    await toast.promise(updateInvoice(inv.id, { status: 'paid' }), {
+  const setInvoiceStatus = async (inv, status) => {
+    const label = STATUS_CONFIG[status]?.label || status
+    await toast.promise(updateInvoice(inv.id, { status }, user.uid), {
       loading: 'Updating…',
-      success: `${inv.invoiceNumber} marked paid`,
-      error: 'Failed to update status',
-    })
-  }
-
-  const markSent = async (inv) => {
-    await toast.promise(updateInvoice(inv.id, { status: 'sent' }), {
-      loading: 'Updating…',
-      success: `${inv.invoiceNumber} marked sent`,
+      success: `${inv.invoiceNumber} marked ${label.toLowerCase()}`,
       error: 'Failed to update status',
     })
   }
@@ -346,18 +354,18 @@ export default function Invoices() {
       {/* Filters + Add */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="flex gap-2 flex-1 flex-wrap">
-          {['all', 'draft', 'sent', 'paid', 'overdue'].map(s => (
+          {FILTERS.map(({ id, label }) => (
             <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
+              key={id}
+              onClick={() => setFilterStatus(id)}
               className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                filterStatus === s ? 'bg-navy text-ivory shadow-card' : 'bg-white/70 text-charcoal-muted hover:bg-white'
+                filterStatus === id ? 'bg-navy text-ivory shadow-card' : 'bg-white/70 text-charcoal-muted hover:bg-white'
               }`}
             >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-              {s !== 'all' && (
+              {label}
+              {id !== 'all' && (
                 <span className="ml-1.5 opacity-60">
-                  {invoices.filter(i => i.status === s).length}
+                  {invoices.filter(i => i.status === id).length}
                 </span>
               )}
             </button>
@@ -419,14 +427,19 @@ export default function Invoices() {
                   <button onClick={() => handleDownloadPDF(inv)} className="btn-ghost text-xs py-1.5 px-3">
                     <Download size={12} /> Download PDF
                   </button>
-                  {inv.status === 'draft' && (
-                    <button onClick={() => markSent(inv)} className="btn-ghost text-xs py-1.5 px-3">
-                      <Send size={12} /> Mark Sent
+                  {inv.status !== 'sent' && (
+                    <button onClick={() => setInvoiceStatus(inv, 'sent')} className="btn-ghost text-xs py-1.5 px-3">
+                      <Send size={12} /> Not Paid
                     </button>
                   )}
-                  {inv.status === 'sent' && (
-                    <button onClick={() => markPaid(inv)} className="btn-ghost text-xs py-1.5 px-3">
-                      <CheckCircle size={12} className="text-emerald-500" /> Mark Paid
+                  {inv.status !== 'partial' && (
+                    <button onClick={() => setInvoiceStatus(inv, 'partial')} className="btn-ghost text-xs py-1.5 px-3">
+                      <CircleDollarSign size={12} className="text-amber-500" /> Partial
+                    </button>
+                  )}
+                  {inv.status !== 'paid' && (
+                    <button onClick={() => setInvoiceStatus(inv, 'paid')} className="btn-ghost text-xs py-1.5 px-3">
+                      <CheckCircle size={12} className="text-emerald-500" /> Paid
                     </button>
                   )}
                   <div className="ml-auto flex gap-1">
