@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import {
   Plus, Search, Users, Phone, Mail, Tag,
-  Trash2, Edit2, ChevronRight, Download, X
+  Trash2, Edit2, ChevronRight, Download, X,
+  Upload, FileText, AlertCircle, CheckCircle2, ClipboardPaste
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { createContact, updateContact, deleteContact } from '../services/contacts'
@@ -14,6 +15,314 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
 
 const TAGS = ['Roofing', 'Siding', 'Gutters', 'Commercial', 'Residential', 'Referred', 'Repeat']
+
+// ─── CSV parsing helpers ──────────────────────────────────────────────────────
+
+function parseCSVLine(line) {
+  const result = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+      else inQuotes = !inQuotes
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  result.push(current.trim())
+  return result
+}
+
+const HEADER_ALIASES = {
+  name:    ['name', 'full name', 'contact name', 'customer name', 'client name', 'first name'],
+  email:   ['email', 'email address', 'e-mail', 'e mail'],
+  phone:   ['phone', 'phone number', 'cell', 'mobile', 'telephone', 'tel'],
+  address: ['address', 'street address', 'location', 'street'],
+  type:    ['type', 'contact type', 'status', 'role'],
+  tags:    ['tags', 'tag', 'categories', 'category', 'services', 'service'],
+  notes:   ['notes', 'note', 'comments', 'comment', 'description', 'details'],
+}
+
+function parseContactsCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return { rows: [], headerError: 'Paste or upload at least a header row and one data row.' }
+
+  const rawHeaders = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/['"]/g, '').trim())
+
+  // Map each field to its column index (first alias match wins)
+  const colIdx = {}
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+    const idx = rawHeaders.findIndex(h => aliases.some(a => h === a || h.includes(a)))
+    if (idx !== -1) colIdx[field] = idx
+  }
+
+  if (colIdx.name === undefined) {
+    return { rows: [], headerError: 'Could not find a "name" column. Check your headers.' }
+  }
+
+  const rows = lines.slice(1).map((line, i) => {
+    const cells = parseCSVLine(line)
+    const get = (field) => (colIdx[field] !== undefined ? cells[colIdx[field]]?.replace(/^"|"$/g, '').trim() : '') || ''
+
+    const rawType = get('type').toLowerCase()
+    const type = ['customer', 'client'].includes(rawType)
+      ? 'customer'
+      : rawType === 'prospect'
+        ? 'prospect'
+        : 'lead'
+
+    const rawTags = get('tags')
+    const tags = rawTags
+      ? rawTags.split(/[;|]/).map(t => t.trim()).filter(Boolean).map(t => {
+          const match = TAGS.find(tag => tag.toLowerCase() === t.toLowerCase())
+          return match ?? t
+        })
+      : []
+
+    const data = { name: get('name'), email: get('email'), phone: get('phone'), address: get('address'), type, tags, notes: get('notes') }
+    const errors = data.name ? [] : ['Name is required']
+
+    return { data, errors, rowNumber: i + 2 }
+  }).filter(r => r.data.name || r.errors.length) // drop fully empty rows
+
+  return { rows }
+}
+
+// ─── Import modal ─────────────────────────────────────────────────────────────
+
+const CSV_TEMPLATE = [
+  'name,email,phone,address,type,tags,notes',
+  '"Jane Doe","jane@example.com","(402) 555-0101","456 Oak Ave, Omaha NE 68102","lead","Roofing;Residential","Hail damage from last storm"',
+  '"Acme Corp","info@acme.com","(402) 555-0202","789 Commerce Blvd, Lincoln NE 68501","customer","Commercial;Gutters","Annual maintenance contract"',
+].join('\n')
+
+function ImportContactsModal({ onClose, onImport }) {
+  const [tab, setTab] = useState('upload')
+  const [pasteText, setPasteText] = useState('')
+  const [parsed, setParsed] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef(null)
+
+  const processText = (text) => {
+    const result = parseContactsCSV(text)
+    setParsed(result)
+  }
+
+  const handleFile = (file) => {
+    if (!file || !file.name.endsWith('.csv')) {
+      toast.error('Please select a .csv file')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (e) => processText(e.target.result)
+    reader.readAsText(file)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    handleFile(e.dataTransfer.files[0])
+  }
+
+  const downloadTemplate = () => {
+    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'db-enterprises-contacts-template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const validRows = parsed?.rows?.filter(r => r.errors.length === 0) ?? []
+  const errorRows = parsed?.rows?.filter(r => r.errors.length > 0) ?? []
+
+  const handleImport = async () => {
+    if (!validRows.length) return
+    setImporting(true)
+    try {
+      await onImport(validRows.map(r => r.data))
+      onClose()
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Tab switcher */}
+      <div className="flex gap-1 p-1 bg-ivory-300/60 rounded-xl">
+        {[
+          { id: 'upload', label: 'Upload CSV', icon: Upload },
+          { id: 'paste',  label: 'Paste Text', icon: ClipboardPaste },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => { setTab(id); setParsed(null) }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+              tab === id
+                ? 'bg-white text-charcoal shadow-sm'
+                : 'text-charcoal-muted hover:text-charcoal'
+            }`}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Template download */}
+      <div className="flex items-center justify-between p-3 rounded-xl bg-ivory/60 border border-ivory-300/80">
+        <div>
+          <p className="text-xs font-medium text-charcoal">CSV Format</p>
+          <p className="text-xs text-charcoal-muted mt-0.5">
+            Columns: <span className="font-mono">name, email, phone, address, type, tags, notes</span>
+          </p>
+          <p className="text-xs text-charcoal-muted">Tags: separate multiple with semicolons <span className="font-mono">(Roofing;Residential)</span></p>
+        </div>
+        <button onClick={downloadTemplate} className="btn-ghost text-xs ml-3 whitespace-nowrap flex-shrink-0">
+          <Download size={12} /> Template
+        </button>
+      </div>
+
+      {/* Upload tab */}
+      {tab === 'upload' && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          className={`relative flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+            dragOver
+              ? 'border-navy bg-navy/5'
+              : 'border-ivory-300 hover:border-navy/40 hover:bg-ivory/40'
+          }`}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="sr-only"
+            onChange={(e) => handleFile(e.target.files[0])}
+          />
+          <Upload size={22} className={dragOver ? 'text-navy' : 'text-charcoal-muted/50'} />
+          <p className="text-sm font-medium text-charcoal">Drop a CSV file here</p>
+          <p className="text-xs text-charcoal-muted">or click to browse</p>
+        </div>
+      )}
+
+      {/* Paste tab */}
+      {tab === 'paste' && (
+        <div className="space-y-2">
+          <textarea
+            className="input-field resize-none font-mono text-xs"
+            rows={7}
+            placeholder={`Paste CSV text here, e.g.:\n\nname,email,phone,type\nJane Doe,jane@example.com,(402) 555-0101,lead`}
+            value={pasteText}
+            onChange={(e) => { setPasteText(e.target.value); setParsed(null) }}
+          />
+          <button
+            onClick={() => processText(pasteText)}
+            disabled={!pasteText.trim()}
+            className="btn-primary w-full justify-center disabled:opacity-40"
+          >
+            <FileText size={13} /> Parse Text
+          </button>
+        </div>
+      )}
+
+      {/* Header error */}
+      {parsed?.headerError && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200">
+          <AlertCircle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-red-700">{parsed.headerError}</p>
+        </div>
+      )}
+
+      {/* Preview results */}
+      {parsed && !parsed.headerError && (
+        <div className="space-y-3">
+          {/* Summary badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-xs font-medium text-green-700">
+              <CheckCircle2 size={12} /> {validRows.length} ready to import
+            </span>
+            {errorRows.length > 0 && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-xs font-medium text-red-700">
+                <AlertCircle size={12} /> {errorRows.length} row{errorRows.length > 1 ? 's' : ''} with errors (skipped)
+              </span>
+            )}
+          </div>
+
+          {/* Preview table */}
+          {parsed.rows.length > 0 && (
+            <div className="overflow-auto max-h-52 rounded-xl border border-ivory-300/80">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-ivory/60 border-b border-ivory-300/60">
+                    <th className="text-left px-3 py-2 text-charcoal-muted font-medium">#</th>
+                    <th className="text-left px-3 py-2 text-charcoal-muted font-medium">Name</th>
+                    <th className="text-left px-3 py-2 text-charcoal-muted font-medium hidden sm:table-cell">Email</th>
+                    <th className="text-left px-3 py-2 text-charcoal-muted font-medium">Type</th>
+                    <th className="text-left px-3 py-2 text-charcoal-muted font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.rows.map((row, i) => (
+                    <tr key={i} className={`border-b border-ivory-300/40 last:border-0 ${row.errors.length ? 'bg-red-50/50' : ''}`}>
+                      <td className="px-3 py-2 text-charcoal-muted">{row.rowNumber}</td>
+                      <td className="px-3 py-2 font-medium text-charcoal">{row.data.name || <span className="text-red-400 italic">missing</span>}</td>
+                      <td className="px-3 py-2 text-charcoal-muted hidden sm:table-cell">{row.data.email || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className={row.data.type === 'customer' ? 'badge-customer' : 'badge-lead'}>
+                          {row.data.type}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.errors.length === 0
+                          ? <span className="text-green-600"><CheckCircle2 size={13} /></span>
+                          : <span className="text-red-500 flex items-center gap-1"><AlertCircle size={13} />{row.errors[0]}</span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Import action */}
+          <div className="flex gap-2 justify-end pt-1">
+            <button onClick={onClose} className="btn-ghost">Cancel</button>
+            <button
+              onClick={handleImport}
+              disabled={!validRows.length || importing}
+              className="btn-primary disabled:opacity-40"
+            >
+              {importing
+                ? 'Importing…'
+                : `Import ${validRows.length} Contact${validRows.length !== 1 ? 's' : ''}`
+              }
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state when no results yet */}
+      {!parsed && (
+        <div className="flex justify-end">
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ContactForm({ initial = {}, onSubmit, onClose }) {
   const [form, setForm] = useState({
@@ -226,6 +535,7 @@ export default function CRM() {
   const [filterType, setFilterType] = useState('all')
   const [filterTag, setFilterTag] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editing, setEditing] = useState(null)
   const [viewing, setViewing] = useState(null)
   const [deleting, setDeleting] = useState(null)
@@ -244,6 +554,17 @@ export default function CRM() {
       success: `${data.name} added`,
       error: 'Failed to add contact',
     })
+  }
+
+  const handleBulkImport = async (rows) => {
+    await toast.promise(
+      Promise.all(rows.map(data => createContact(data, user.uid))),
+      {
+        loading: `Importing ${rows.length} contact${rows.length !== 1 ? 's' : ''}…`,
+        success: `${rows.length} contact${rows.length !== 1 ? 's' : ''} imported`,
+        error: 'Import failed — some contacts may not have been saved',
+      }
+    )
   }
 
   const handleEdit = async (data) => {
@@ -311,6 +632,9 @@ export default function CRM() {
           )}
           <button onClick={exportCSV} className="btn-ghost" title="Export CSV">
             <Download size={14} />
+          </button>
+          <button onClick={() => setShowImport(true)} className="btn-ghost whitespace-nowrap" title="Import contacts from CSV">
+            <Upload size={14} /> Import
           </button>
           <button onClick={() => setShowAdd(true)} className="btn-primary whitespace-nowrap">
             <Plus size={14} /> Add Contact
@@ -393,6 +717,11 @@ export default function CRM() {
       </div>
 
       <p className="text-xs text-charcoal-muted mt-3 px-1">{filtered.length} of {contacts.length} contacts</p>
+
+      {/* Import modal */}
+      <Modal open={showImport} onClose={() => setShowImport(false)} title="Import Contacts" width="max-w-2xl">
+        <ImportContactsModal onClose={() => setShowImport(false)} onImport={handleBulkImport} />
+      </Modal>
 
       {/* Add modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Contact">
