@@ -6,6 +6,11 @@ export const contactSchema = z.object({
   phone: z.string().max(20).optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
   type: z.enum(['lead', 'customer', 'prospect']),
+  status: z.enum(['new', 'hot', 'warm', 'cold', 'follow_up', 'won', 'lost']).optional(),
+  pipeline: z.enum(['new', 'contacted', 'estimate_scheduled', 'estimate_sent', 'contract_sent', 'won', 'lost']).optional(),
+  source: z.enum(['referral', 'google', 'door_knock', 'yard_sign', 'social_media', 'repeat_customer', 'other', '']).optional(),
+  followUpDate: z.string().optional().or(z.literal('')),
+  estimatedValue: z.union([z.number(), z.string()]).optional(),
   tags: z.array(z.string()).optional(),
   notes: z.string().max(2000).optional().or(z.literal('')),
 })

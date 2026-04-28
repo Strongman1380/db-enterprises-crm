@@ -2,9 +2,10 @@ import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import {
-  Plus, Search, Users, Phone, Mail, Tag,
-  Trash2, Edit2, ChevronRight, Download, X,
-  Upload, FileText, AlertCircle, CheckCircle2, ClipboardPaste
+  Plus, Search, Users, Phone, Mail,
+  Trash2, Edit2, ChevronRight, Download,
+  Upload, FileText, AlertCircle, CheckCircle2, ClipboardPaste,
+  Calendar, DollarSign, Flame, ThermometerSnowflake, Clock, TrendingUp, MapPin
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { createContact, updateContact, deleteContact } from '../services/contacts'
@@ -15,6 +16,46 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import EmptyState from '../components/ui/EmptyState'
 
 const TAGS = ['Roofing', 'Siding', 'Gutters', 'Commercial', 'Residential', 'Referred', 'Repeat']
+
+const STATUS_OPTIONS = [
+  { value: 'new',       label: 'New',         className: 'bg-slate-100 text-slate-600' },
+  { value: 'hot',       label: 'Hot Lead',    className: 'bg-red-100 text-red-700' },
+  { value: 'warm',      label: 'Warm',        className: 'bg-orange-100 text-orange-700' },
+  { value: 'cold',      label: 'Cold',        className: 'bg-blue-100 text-blue-700' },
+  { value: 'follow_up', label: 'Follow Up',   className: 'bg-yellow-100 text-yellow-700' },
+  { value: 'won',       label: 'Won',         className: 'bg-green-100 text-green-700' },
+  { value: 'lost',      label: 'Lost',        className: 'bg-gray-100 text-gray-500' },
+]
+
+const PIPELINE_OPTIONS = [
+  { value: 'new',                label: 'New Lead' },
+  { value: 'contacted',          label: 'Contacted' },
+  { value: 'estimate_scheduled', label: 'Estimate Scheduled' },
+  { value: 'estimate_sent',      label: 'Estimate Sent' },
+  { value: 'contract_sent',      label: 'Contract Sent' },
+  { value: 'won',                label: 'Won' },
+  { value: 'lost',               label: 'Lost' },
+]
+
+const SOURCE_OPTIONS = [
+  { value: 'referral',        label: 'Referral' },
+  { value: 'google',          label: 'Google' },
+  { value: 'door_knock',      label: 'Door Knock' },
+  { value: 'yard_sign',       label: 'Yard Sign' },
+  { value: 'social_media',    label: 'Social Media' },
+  { value: 'repeat_customer', label: 'Repeat Customer' },
+  { value: 'other',           label: 'Other' },
+]
+
+function StatusBadge({ status }) {
+  const opt = STATUS_OPTIONS.find(o => o.value === status)
+  if (!opt) return null
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium ${opt.className}`}>
+      {opt.label}
+    </span>
+  )
+}
 
 // ─── CSV parsing helpers ──────────────────────────────────────────────────────
 
@@ -39,13 +80,18 @@ function parseCSVLine(line) {
 }
 
 const HEADER_ALIASES = {
-  name:    ['name', 'full name', 'contact name', 'customer name', 'client name', 'first name'],
-  email:   ['email', 'email address', 'e-mail', 'e mail'],
-  phone:   ['phone', 'phone number', 'cell', 'mobile', 'telephone', 'tel'],
-  address: ['address', 'street address', 'location', 'street'],
-  type:    ['type', 'contact type', 'status', 'role'],
-  tags:    ['tags', 'tag', 'categories', 'category', 'services', 'service'],
-  notes:   ['notes', 'note', 'comments', 'comment', 'description', 'details'],
+  name:           ['name', 'full name', 'contact name', 'customer name', 'client name', 'first name'],
+  email:          ['email', 'email address', 'e-mail', 'e mail'],
+  phone:          ['phone', 'phone number', 'cell', 'mobile', 'telephone', 'tel'],
+  address:        ['address', 'street address', 'location', 'street'],
+  type:           ['type', 'contact type', 'role'],
+  status:         ['status', 'lead status', 'crm status', 'priority'],
+  source:         ['source', 'lead source', 'how found', 'origin'],
+  pipeline:       ['pipeline', 'pipeline stage', 'stage'],
+  followUpDate:   ['follow up date', 'followup date', 'next contact', 'follow-up'],
+  estimatedValue: ['estimated value', 'value', 'job value', 'estimate', 'amount'],
+  tags:           ['tags', 'tag', 'categories', 'category', 'services', 'service'],
+  notes:          ['notes', 'note', 'comments', 'comment', 'description', 'details'],
 }
 
 function parseContactsCSV(text) {
@@ -326,13 +372,18 @@ function ImportContactsModal({ onClose, onImport }) {
 
 function ContactForm({ initial = {}, onSubmit, onClose }) {
   const [form, setForm] = useState({
-    name: initial.name || '',
-    email: initial.email || '',
-    phone: initial.phone || '',
-    address: initial.address || '',
-    type: initial.type || 'lead',
-    tags: initial.tags || [],
-    notes: initial.notes || '',
+    name:           initial.name || '',
+    email:          initial.email || '',
+    phone:          initial.phone || '',
+    address:        initial.address || '',
+    type:           initial.type || 'lead',
+    status:         initial.status || 'new',
+    pipeline:       initial.pipeline || 'new',
+    source:         initial.source || '',
+    followUpDate:   initial.followUpDate || '',
+    estimatedValue: initial.estimatedValue || '',
+    tags:           initial.tags || [],
+    notes:          initial.notes || '',
   })
   const [errors, setErrors] = useState({})
 
@@ -357,49 +408,107 @@ function ContactForm({ initial = {}, onSubmit, onClose }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="col-span-2">
-          <label className="label">Full Name *</label>
-          <input
-            className={`input-field ${errors.name ? 'border-red-400 focus:ring-red-300' : ''}`}
-            value={form.name}
-            onChange={e => set('name', e.target.value)}
-            placeholder="John Smith"
-          />
-          {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-        </div>
-        <div>
-          <label className="label">Email</label>
-          <input
-            className={`input-field ${errors.email ? 'border-red-400 focus:ring-red-300' : ''}`}
-            type="email"
-            value={form.email}
-            onChange={e => set('email', e.target.value)}
-            placeholder="john@example.com"
-          />
-          {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
-        </div>
-        <div>
-          <label className="label">Phone</label>
-          <input className="input-field" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(402) 555-0100" />
-        </div>
-        <div className="col-span-2">
-          <label className="label">Address</label>
-          <input className="input-field" value={form.address} onChange={e => set('address', e.target.value)} placeholder="123 Main St, City, NE" />
-        </div>
-        <div>
-          <label className="label">Contact Type</label>
-          <select className="input-field" value={form.type} onChange={e => set('type', e.target.value)}>
-            <option value="lead">Lead</option>
-            <option value="customer">Customer</option>
-            <option value="prospect">Prospect</option>
-          </select>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Basic Info */}
+      <div>
+        <p className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider mb-3">Contact Info</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="label">Full Name *</label>
+            <input
+              className={`input-field ${errors.name ? 'border-red-400 focus:ring-red-300' : ''}`}
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              placeholder="John Smith"
+            />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input
+              className={`input-field ${errors.email ? 'border-red-400 focus:ring-red-300' : ''}`}
+              type="email"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              placeholder="john@example.com"
+            />
+            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+          </div>
+          <div>
+            <label className="label">Phone</label>
+            <input className="input-field" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(402) 555-0100" />
+          </div>
+          <div className="col-span-2">
+            <label className="label">Address</label>
+            <input className="input-field" value={form.address} onChange={e => set('address', e.target.value)} placeholder="123 Main St, City, NE" />
+          </div>
         </div>
       </div>
 
+      {/* CRM Fields */}
       <div>
-        <label className="label">Tags</label>
+        <p className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider mb-3">CRM Details</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Contact Type</label>
+            <select className="input-field" value={form.type} onChange={e => set('type', e.target.value)}>
+              <option value="lead">Lead</option>
+              <option value="prospect">Prospect</option>
+              <option value="customer">Customer</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Status</label>
+            <select className="input-field" value={form.status} onChange={e => set('status', e.target.value)}>
+              {STATUS_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Pipeline Stage</label>
+            <select className="input-field" value={form.pipeline} onChange={e => set('pipeline', e.target.value)}>
+              {PIPELINE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Lead Source</label>
+            <select className="input-field" value={form.source} onChange={e => set('source', e.target.value)}>
+              <option value="">— Unknown —</option>
+              {SOURCE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Follow-up Date</label>
+            <input
+              type="date"
+              className="input-field"
+              value={form.followUpDate}
+              onChange={e => set('followUpDate', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Estimated Job Value ($)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="input-field"
+              value={form.estimatedValue}
+              onChange={e => set('estimatedValue', e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div>
+        <p className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider mb-3">Tags</p>
         <div className="flex flex-wrap gap-2">
           {TAGS.map(tag => (
             <button
@@ -418,6 +527,7 @@ function ContactForm({ initial = {}, onSubmit, onClose }) {
         </div>
       </div>
 
+      {/* Notes */}
       <div>
         <label className="label">Notes</label>
         <textarea
@@ -440,49 +550,100 @@ function ContactForm({ initial = {}, onSubmit, onClose }) {
 }
 
 function ContactDetail({ contact, onEdit, onDelete, onClose }) {
+  const pipeline = PIPELINE_OPTIONS.find(o => o.value === contact.pipeline)
+  const source   = SOURCE_OPTIONS.find(o => o.value === contact.source)
+
+  const isFollowUpOverdue = contact.followUpDate && contact.followUpDate < new Date().toISOString().slice(0, 10)
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-start gap-4">
         <div className="w-14 h-14 rounded-2xl bg-navy flex items-center justify-center text-gold text-xl font-bold flex-shrink-0">
           {contact.name.charAt(0).toUpperCase()}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-charcoal">{contact.name}</h3>
-          <span className={contact.type === 'customer' ? 'badge-customer' : 'badge-lead'}>{contact.type || 'lead'}</span>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span className={contact.type === 'customer' ? 'badge-customer' : 'badge-lead'}>{contact.type || 'lead'}</span>
+            {contact.status && <StatusBadge status={contact.status} />}
+          </div>
         </div>
       </div>
 
+      {/* Contact info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {contact.email && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-ivory/60">
-            <Mail size={14} className="text-charcoal-muted" />
-            <div>
+            <Mail size={14} className="text-charcoal-muted flex-shrink-0" />
+            <div className="min-w-0">
               <p className="text-xs text-charcoal-muted">Email</p>
-              <p className="text-sm text-charcoal">{contact.email}</p>
+              <p className="text-sm text-charcoal truncate">{contact.email}</p>
             </div>
           </div>
         )}
         {contact.phone && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-ivory/60">
-            <Phone size={14} className="text-charcoal-muted" />
+            <Phone size={14} className="text-charcoal-muted flex-shrink-0" />
             <div>
               <p className="text-xs text-charcoal-muted">Phone</p>
               <p className="text-sm text-charcoal">{contact.phone}</p>
             </div>
           </div>
         )}
+        {contact.address && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-ivory/60 sm:col-span-2">
+            <MapPin size={14} className="text-charcoal-muted flex-shrink-0" />
+            <div>
+              <p className="text-xs text-charcoal-muted">Address</p>
+              <p className="text-sm text-charcoal">{contact.address}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {contact.address && (
-        <div className="p-3 rounded-xl bg-ivory/60">
-          <p className="text-xs text-charcoal-muted mb-0.5">Address</p>
-          <p className="text-sm text-charcoal">{contact.address}</p>
+      {/* CRM Details */}
+      <div>
+        <p className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider mb-3">CRM Details</p>
+        <div className="grid grid-cols-2 gap-3">
+          {pipeline && (
+            <div className="p-3 rounded-xl bg-ivory/60">
+              <p className="text-xs text-charcoal-muted flex items-center gap-1 mb-0.5"><TrendingUp size={11} /> Pipeline</p>
+              <p className="text-sm font-medium text-charcoal">{pipeline.label}</p>
+            </div>
+          )}
+          {source && (
+            <div className="p-3 rounded-xl bg-ivory/60">
+              <p className="text-xs text-charcoal-muted mb-0.5">Lead Source</p>
+              <p className="text-sm font-medium text-charcoal">{source.label}</p>
+            </div>
+          )}
+          {contact.followUpDate && (
+            <div className={`p-3 rounded-xl ${isFollowUpOverdue ? 'bg-red-50 border border-red-200' : 'bg-ivory/60'}`}>
+              <p className={`text-xs flex items-center gap-1 mb-0.5 ${isFollowUpOverdue ? 'text-red-500' : 'text-charcoal-muted'}`}>
+                <Calendar size={11} /> Follow-up Date
+              </p>
+              <p className={`text-sm font-medium ${isFollowUpOverdue ? 'text-red-700' : 'text-charcoal'}`}>
+                {new Date(contact.followUpDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {isFollowUpOverdue && <span className="ml-1 text-xs font-normal">(overdue)</span>}
+              </p>
+            </div>
+          )}
+          {contact.estimatedValue && (
+            <div className="p-3 rounded-xl bg-ivory/60">
+              <p className="text-xs text-charcoal-muted flex items-center gap-1 mb-0.5"><DollarSign size={11} /> Est. Value</p>
+              <p className="text-sm font-medium text-charcoal">
+                ${Number(contact.estimatedValue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
+      {/* Tags */}
       {contact.tags?.length > 0 && (
         <div>
-          <p className="text-xs text-charcoal-muted mb-2">Tags</p>
+          <p className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider mb-2">Tags</p>
           <div className="flex flex-wrap gap-1.5">
             {contact.tags.map(tag => (
               <span key={tag} className="px-2.5 py-1 bg-navy/8 text-navy text-xs font-medium rounded-lg">{tag}</span>
@@ -491,10 +652,11 @@ function ContactDetail({ contact, onEdit, onDelete, onClose }) {
         </div>
       )}
 
+      {/* Notes */}
       {contact.notes && (
         <div className="p-3 rounded-xl bg-ivory/60">
           <p className="text-xs text-charcoal-muted mb-0.5">Notes</p>
-          <p className="text-sm text-charcoal">{contact.notes}</p>
+          <p className="text-sm text-charcoal whitespace-pre-wrap">{contact.notes}</p>
         </div>
       )}
 
@@ -517,11 +679,11 @@ function ContactDetail({ contact, onEdit, onDelete, onClose }) {
       )}
 
       <div className="flex gap-2 pt-1">
-        <button onClick={onEdit} className="btn-ghost flex-1 justify-center">
-          <Edit2 size={14} /> Edit
+        <button onClick={onEdit} className="btn-primary flex-1 justify-center">
+          <Edit2 size={14} /> Edit Contact
         </button>
-        <button onClick={onDelete} className="btn-danger flex-1 justify-center">
-          <Trash2 size={14} /> Delete
+        <button onClick={onDelete} className="btn-danger justify-center px-4">
+          <Trash2 size={14} />
         </button>
       </div>
     </div>
@@ -533,6 +695,7 @@ export default function CRM() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 250)
   const [filterType, setFilterType] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
   const [filterTag, setFilterTag] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -544,8 +707,9 @@ export default function CRM() {
     const q = debouncedSearch.toLowerCase()
     const matchSearch = !q || c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.phone?.includes(q)
     const matchType = filterType === 'all' || c.type === filterType
+    const matchStatus = filterStatus === 'all' || c.status === filterStatus
     const matchTag = !filterTag || c.tags?.includes(filterTag)
-    return matchSearch && matchType && matchTag
+    return matchSearch && matchType && matchStatus && matchTag
   })
 
   const handleAdd = async (data) => {
@@ -589,8 +753,15 @@ export default function CRM() {
 
   const exportCSV = () => {
     const rows = [
-      ['Name', 'Email', 'Phone', 'Address', 'Type', 'Tags'],
-      ...filtered.map(c => [c.name, c.email, c.phone, c.address, c.type, (c.tags || []).join('; ')]),
+      ['Name', 'Email', 'Phone', 'Address', 'Type', 'Status', 'Pipeline', 'Source', 'Follow-up Date', 'Estimated Value', 'Tags', 'Notes'],
+      ...filtered.map(c => [
+        c.name, c.email, c.phone, c.address, c.type,
+        c.status || '', c.pipeline || '', c.source || '',
+        c.followUpDate || '',
+        c.estimatedValue || '',
+        (c.tags || []).join('; '),
+        c.notes || '',
+      ]),
     ]
     const csv = rows.map(r => r.map(v => `"${v || ''}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -621,8 +792,14 @@ export default function CRM() {
           <select className="input-field w-auto" value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="all">All Types</option>
             <option value="lead">Leads</option>
-            <option value="customer">Customers</option>
             <option value="prospect">Prospects</option>
+            <option value="customer">Customers</option>
+          </select>
+          <select className="input-field w-auto" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="all">All Statuses</option>
+            {STATUS_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
           {allTags.length > 0 && (
             <select className="input-field w-auto" value={filterTag} onChange={e => setFilterTag(e.target.value)}>
@@ -663,54 +840,83 @@ export default function CRM() {
               <tr className="border-b border-ivory-300/60 bg-ivory/40">
                 <th className="table-header">Name</th>
                 <th className="table-header hidden md:table-cell">Contact</th>
-                <th className="table-header hidden lg:table-cell">Address</th>
                 <th className="table-header">Type</th>
+                <th className="table-header">Status</th>
+                <th className="table-header hidden lg:table-cell">Follow-up</th>
                 <th className="table-header hidden md:table-cell">Tags</th>
-                <th className="table-header w-10" />
+                <th className="table-header w-16" />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((contact) => (
-                <tr
-                  key={contact.id}
-                  className="table-row cursor-pointer"
-                  onClick={() => setViewing(contact)}
-                >
-                  <td className="table-cell">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-navy/10 flex items-center justify-center text-navy text-xs font-bold flex-shrink-0">
-                        {contact.name.charAt(0).toUpperCase()}
+              {filtered.map((contact) => {
+                const isOverdue = contact.followUpDate && contact.followUpDate < new Date().toISOString().slice(0, 10)
+                return (
+                  <tr
+                    key={contact.id}
+                    className="table-row cursor-pointer"
+                    onClick={() => setViewing(contact)}
+                  >
+                    <td className="table-cell">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-navy/10 flex items-center justify-center text-navy text-xs font-bold flex-shrink-0">
+                          {contact.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium">{contact.name}</span>
                       </div>
-                      <span className="font-medium">{contact.name}</span>
-                    </div>
-                  </td>
-                  <td className="table-cell hidden md:table-cell">
-                    <div className="space-y-0.5">
-                      {contact.email && <p className="text-xs">{contact.email}</p>}
-                      {contact.phone && <p className="text-xs text-charcoal-muted">{contact.phone}</p>}
-                    </div>
-                  </td>
-                  <td className="table-cell hidden lg:table-cell text-xs text-charcoal-muted">{contact.address || '—'}</td>
-                  <td className="table-cell">
-                    <span className={contact.type === 'customer' ? 'badge-customer' : 'badge-lead'}>
-                      {contact.type || 'lead'}
-                    </span>
-                  </td>
-                  <td className="table-cell hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {(contact.tags || []).slice(0, 2).map(tag => (
-                        <span key={tag} className="px-2 py-0.5 bg-navy/6 text-navy text-xs rounded-md">{tag}</span>
-                      ))}
-                      {(contact.tags || []).length > 2 && (
-                        <span className="text-xs text-charcoal-muted">+{contact.tags.length - 2}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="table-cell">
-                    <ChevronRight size={14} className="text-charcoal-muted/40" />
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="table-cell hidden md:table-cell">
+                      <div className="space-y-0.5">
+                        {contact.email && <p className="text-xs">{contact.email}</p>}
+                        {contact.phone && <p className="text-xs text-charcoal-muted">{contact.phone}</p>}
+                      </div>
+                    </td>
+                    <td className="table-cell">
+                      <span className={contact.type === 'customer' ? 'badge-customer' : 'badge-lead'}>
+                        {contact.type || 'lead'}
+                      </span>
+                    </td>
+                    <td className="table-cell">
+                      {contact.status
+                        ? <StatusBadge status={contact.status} />
+                        : <span className="text-xs text-charcoal-muted/50">—</span>
+                      }
+                    </td>
+                    <td className="table-cell hidden lg:table-cell">
+                      {contact.followUpDate
+                        ? (
+                          <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-charcoal-muted'}`}>
+                            {new Date(contact.followUpDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {isOverdue && ' ⚠'}
+                          </span>
+                        )
+                        : <span className="text-xs text-charcoal-muted/50">—</span>
+                      }
+                    </td>
+                    <td className="table-cell hidden md:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {(contact.tags || []).slice(0, 2).map(tag => (
+                          <span key={tag} className="px-2 py-0.5 bg-navy/6 text-navy text-xs rounded-md">{tag}</span>
+                        ))}
+                        {(contact.tags || []).length > 2 && (
+                          <span className="text-xs text-charcoal-muted">+{contact.tags.length - 2}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="table-cell">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditing(contact) }}
+                          className="p-1.5 rounded-lg hover:bg-navy/8 text-charcoal-muted hover:text-navy transition-colors"
+                          title="Edit contact"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <ChevronRight size={14} className="text-charcoal-muted/40" />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
