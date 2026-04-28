@@ -23,7 +23,7 @@ const CO = {
   name:    'DB Enterprises',
   tagline: 'Roofing  ·  Siding  ·  Construction',
   address: 'Geneva, NE',
-  phone:   '(402) 759-2210',
+  phone:   '(402) 641-4482',
   email:   'info@dbenterprises.com',
   website: 'www.dbenterprises.com',
 }
