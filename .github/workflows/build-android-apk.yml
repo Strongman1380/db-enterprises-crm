@@ -45,7 +45,6 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release
-        if: github.ref == 'refs/heads/main'
         uses: ncipollo/release-action@v1
         with:
           tag: android-v${{ github.run_number }}
