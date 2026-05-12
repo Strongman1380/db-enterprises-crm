@@ -1,0 +1,3 @@
+-keep class com.dbenterprises.crm.** { *; }
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable
